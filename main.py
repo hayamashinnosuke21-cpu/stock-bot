@@ -3,12 +3,15 @@ import time
 import yfinance as yf
 import pandas as pd
 
-DISCORD_WEBHOOK_URL = "ここにWebhook"
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1497821260208541816/AF2vg1ekJvqUCFYuGFXeZMpgVzMZCoaB5nSI3MYMZoOlwhWioaTBS2qfQ2JtrJ1Aoakz"
 
-SYMBOLS = ["7203.T","9984.T","6758.T"]
+SYMBOLS = ["7203.T", "9984.T", "6758.T"]
 
 def send_discord(msg):
-    requests.post(DISCORD_WEBHOOK_URL, json={"content": msg})
+    try:
+        requests.post(DISCORD_WEBHOOK_URL, json={"content": msg})
+    except Exception as e:
+        print("通知エラー:", e)
 
 def check_signal(df):
     if len(df) < 25:
@@ -27,11 +30,10 @@ def check_signal(df):
 
     return None
 
-# ★起動確認フラグ
+# ▼最初の1回だけテスト通知
 first_run = True
 
 while True:
-    # ★最初の1回だけテスト通知
     if first_run:
         send_discord("✅ Render起動確認OK（テスト通知）")
         first_run = False
@@ -45,6 +47,6 @@ while True:
                 send_discord(f"{symbol} {signal}")
 
         except Exception as e:
-            print(e)
+            print("取得エラー:", e)
 
     time.sleep(60)
