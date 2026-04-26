@@ -4,27 +4,38 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 
-# ▼Webhook
+# ===== 設定 =====
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1497821260208541816/AF2vg1ekJvqUCFYuGFXeZMpgVzMZCoaB5nSI3MYMZoOlwhWioaTBS2qfQ2JtrJ1Aoakz"
 
-# ▼監視候補（ここは後で増やすと精度UP）
+# ▼候補ユニバース（ここ重要：増やすほど精度UP）
 CANDIDATES = [
     "4593.T","6619.T","7342.T","6526.T","4165.T",
-    "5253.T","9229.T","5586.T","4894.T","4385.T"
+    "5253.T","9229.T","5586.T","4894.T","4385.T",
+    "7373.T","9553.T","5255.T","5132.T","4890.T",
+    "4475.T","4882.T","7776.T","3681.T","4011.T"
 ]
 
+# ===== 基本関数 =====
 def send_discord(msg):
     try:
         requests.post(DISCORD_WEBHOOK_URL, json={"content": msg})
-    except:
-        pass
+    except Exception as e:
+        print("通知エラー:", e)
 
-def is_market_open():
-    now = datetime.utcnow() + timedelta(hours=9)  # JST変換
-    return now.hour == 9 and now.minute <= 30
+def now_jst():
+    return datetime.utcnow() + timedelta(hours=9)
 
-def pick_active_stocks():
-    selected = []
+def is_pick_time():
+    n = now_jst()
+    return n.hour == 8 and 45 <= n.minute <= 55
+
+def is_trade_time():
+    n = now_jst()
+    return n.hour == 9 and n.minute <= 30
+
+# ===== 銘柄抽出 =====
+def pick_stocks():
+    picked = []
 
     for symbol in CANDIDATES:
         try:
@@ -35,15 +46,16 @@ def pick_active_stocks():
 
             change = (df["Close"].iloc[-1] - df["Close"].iloc[0]) / df["Close"].iloc[0]
 
-            # ▼上昇率2%以上を抽出（疑似ランキング）
             if change > 0.02:
-                selected.append(symbol)
+                picked.append((symbol, change))
 
         except:
             continue
 
-    return selected
+    picked = sorted(picked, key=lambda x: x[1], reverse=True)
+    return [p[0] for p in picked[:5]]
 
+# ===== シグナル判定 =====
 def check_signal(df):
     if len(df) < 25:
         return None
@@ -63,18 +75,27 @@ def check_signal(df):
 
     return None
 
+# ===== メイン =====
 print("起動中...")
 
 selected_symbols = []
+picked_today = False
 
 while True:
     try:
-        if is_market_open():
-            # ▼9:00〜9:30だけ銘柄選定
-            if not selected_symbols:
-                selected_symbols = pick_active_stocks()
-                send_discord(f"監視銘柄: {selected_symbols}")
+        # ▼朝の自動銘柄ピック
+        if is_pick_time() and not picked_today:
+            selected_symbols = pick_stocks()
 
+            if selected_symbols:
+                send_discord("【本日の監視銘柄】\n" + "\n".join(selected_symbols))
+            else:
+                send_discord("銘柄なし（様子見）")
+
+            picked_today = True
+
+        # ▼寄り付き監視
+        if is_trade_time() and selected_symbols:
             for symbol in selected_symbols:
                 df = yf.download(symbol, interval="5m", period="1d", progress=False)
                 signal = check_signal(df)
@@ -82,8 +103,10 @@ while True:
                 if signal:
                     send_discord(f"{symbol} {signal}")
 
-        else:
-            selected_symbols = []  # リセット
+        # ▼日付リセット
+        if now_jst().hour == 0 and now_jst().minute == 0:
+            picked_today = False
+            selected_symbols = []
 
     except Exception as e:
         print("エラー:", e)
