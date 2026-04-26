@@ -27,7 +27,15 @@ def check_signal(df):
 
     return None
 
+# ★起動確認フラグ
+first_run = True
+
 while True:
+    # ★最初の1回だけテスト通知
+    if first_run:
+        send_discord("✅ Render起動確認OK（テスト通知）")
+        first_run = False
+
     for symbol in SYMBOLS:
         try:
             df = yf.download(symbol, interval="5m", period="1d", progress=False)
